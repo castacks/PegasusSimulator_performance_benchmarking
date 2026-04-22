@@ -104,67 +104,97 @@ def _plot(results: dict[int, dict], output: Path) -> None:
     import numpy as np
 
     nums = sorted(results.keys())
-    labels = [f"{n}\n{results[n]['config']['scene'][:14]}" for n in nums]
 
     def _color(n: int) -> str:
         cfg = results[n]["config"]
         if not cfg.get("pegasus"):
-            return "#1f77b4"  # blue: baseline
+            return "#1f77b4"  # blue: no Pegasus baseline
         if cfg.get("drone_backend") == "px4_mavlink":
             return "#d62728"  # red: PX4
-        return "#2ca02c"      # green: no PX4
+        return "#2ca02c"      # green: Pegasus, no PX4
+
+    def _label(n: int) -> str:
+        cfg = results[n]["config"]
+        scene = cfg["scene"]
+        scene_short = {"default_ground_plane": "flat/default", "Flat Plane": "flat plane"}.get(scene, scene)
+        hz = round(1.0 / results[n]["physics_dt"])
+        peg = "Pegasus" if cfg.get("pegasus") else "no Pegasus"
+        backend = cfg.get("drone_backend") or ""
+        drone = {"python_nonlinear_controller": "Python drone", "px4_mavlink": "PX4 drone"}.get(backend, "no drone")
+        return f"#{n}: {peg}\n{scene_short} · {hz} Hz\n{drone}"
+
+    def _legend_label(n: int) -> str:
+        cfg = results[n]["config"]
+        scene = cfg["scene"]
+        scene_short = {"default_ground_plane": "flat", "Flat Plane": "flat plane"}.get(scene, scene)
+        hz = round(1.0 / results[n]["physics_dt"])
+        backend = cfg.get("drone_backend") or ""
+        drone = {"python_nonlinear_controller": "Python", "px4_mavlink": "PX4"}.get(backend, "–")
+        return f"#{n} {scene_short} {hz}Hz {drone}"
 
     colors = [_color(n) for n in nums]
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Isaac Sim + Pegasus cube-fall benchmark", fontsize=14, fontweight="bold")
-
-    # Top-left: startup time breakdown (stacked)
-    ax = axes[0, 0]
-    sim_app = [results[n]["startup_sim_app_s"] for n in nums]
-    world = [results[n]["startup_world_and_scene_s"] for n in nums]
+    labels = [_label(n) for n in nums]
     x = np.arange(len(nums))
-    ax.bar(x, sim_app, color="#7f7f7f", label="SimulationApp")
-    ax.bar(x, world, bottom=sim_app, color="#bcbd22", label="World + scene")
+    bar_width = min(0.65, 5.0 / len(nums))  # narrow bars when many scripts
+
+    fig, axes = plt.subplots(2, 2, figsize=(max(18, len(nums) * 2), 14))
+    fig.suptitle("Isaac Sim + Pegasus cube-fall benchmark", fontsize=15, fontweight="bold")
+
+    def _set_xticks(ax, rotate=45):
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=rotate, ha="right", fontsize=8.5,
+                           multialignment="center")
+        ax.tick_params(axis="x", pad=4)
+
+    # Top-left: startup time breakdown (stacked bars)
+    ax = axes[0, 0]
+    sim_app_vals = [results[n]["startup_sim_app_s"] for n in nums]
+    world_vals = [results[n]["startup_world_and_scene_s"] for n in nums]
+    ax.bar(x, sim_app_vals, bar_width, color="#7f7f7f", label="SimulationApp init")
+    ax.bar(x, world_vals, bar_width, bottom=sim_app_vals, color="#bcbd22", label="World + scene + reset")
     for i, n in enumerate(nums):
-        ax.text(i, sim_app[i] + world[i], f"{sim_app[i] + world[i]:.1f}s",
-                ha="center", va="bottom", fontsize=9)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
+        total = sim_app_vals[i] + world_vals[i]
+        ax.text(i, total + 0.3, f"{total:.1f}s", ha="center", va="bottom", fontsize=8, fontweight="bold")
+    _set_xticks(ax)
     ax.set_ylabel("seconds")
-    ax.set_title("Startup time")
-    ax.legend(loc="upper left")
+    ax.set_title("Startup time", fontsize=11)
+    ax.legend(loc="upper left", fontsize=9)
     ax.grid(axis="y", alpha=0.3)
+    ax.margins(x=0.05)
 
     # Top-right: steady-state RTF
     ax = axes[0, 1]
     steady = [results[n]["steady_rtf"] for n in nums]
-    bars = ax.bar(x, steady, color=colors)
-    ax.axhline(1.0, color="k", linestyle="--", linewidth=1, alpha=0.6, label="real-time (1.0)")
+    bars = ax.bar(x, steady, bar_width, color=colors)
+    ax.axhline(1.0, color="k", linestyle="--", linewidth=1.2, alpha=0.7, label="real-time = 1.0")
     for bar, v in zip(bars, steady):
-        ax.text(bar.get_x() + bar.get_width() / 2, v, f"{v:.2f}",
-                ha="center", va="bottom", fontsize=9)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("RTF = simulated_s / wall_s")
-    ax.set_title("Steady-state real-time factor (headline metric)")
-    ax.legend(loc="upper right")
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 0.01, f"{v:.2f}",
+                ha="center", va="bottom", fontsize=8, fontweight="bold")
+    _set_xticks(ax)
+    ax.set_ylabel("RTF  (simulated s / wall s)", fontsize=9)
+    ax.set_title("Steady-state real-time factor  ◀ headline metric", fontsize=11)
+    ax.legend(loc="upper right", fontsize=9)
     ax.grid(axis="y", alpha=0.3)
+    ax.margins(x=0.05)
 
-    # Bottom-left: fall RTF vs steady RTF grouped
+    # Bottom-left: fall RTF vs steady RTF side-by-side
     ax = axes[1, 0]
     fall = [results[n]["fall_rtf"] for n in nums]
-    w = 0.38
-    ax.bar(x - w/2, fall, w, color="#ff7f0e", label="fall (transient)")
-    ax.bar(x + w/2, steady, w, color=colors, label="steady")
-    ax.axhline(1.0, color="k", linestyle="--", linewidth=1, alpha=0.6)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylabel("RTF")
-    ax.set_title("Fall RTF vs steady-state RTF")
-    ax.legend(loc="upper right")
+    w = bar_width * 0.46
+    ax.bar(x - w * 0.55, fall, w * 1.05, color="#ff7f0e", label="fall (transient)")
+    ax.bar(x + w * 0.55, steady, w * 1.05, color=colors, label="steady-state")
+    ax.axhline(1.0, color="k", linestyle="--", linewidth=1.2, alpha=0.7)
+    for i, (f, s) in enumerate(zip(fall, steady)):
+        ax.text(i - w * 0.55, f + 0.01, f"{f:.2f}", ha="center", va="bottom", fontsize=7)
+        ax.text(i + w * 0.55, s + 0.01, f"{s:.2f}", ha="center", va="bottom", fontsize=7)
+    _set_xticks(ax)
+    ax.set_ylabel("RTF", fontsize=9)
+    ax.set_title("Fall RTF vs steady-state RTF", fontsize=11)
+    ax.legend(loc="upper right", fontsize=9)
     ax.grid(axis="y", alpha=0.3)
+    ax.margins(x=0.05)
 
-    # Bottom-right: rolling RTF over simulated time
+    # Bottom-right: rolling RTF jitter (line plot, legend outside)
     ax = axes[1, 1]
     for n in nums:
         series = results[n].get("rolling_rtf", [])
@@ -172,18 +202,20 @@ def _plot(results: dict[int, dict], output: Path) -> None:
             continue
         xs = [s["sim_time_s"] for s in series]
         ys = [s["rtf"] for s in series]
-        ax.plot(xs, ys, marker="o", linewidth=1.5, color=_color(n),
-                label=f"{n}: {results[n]['config']['scene'][:18]}")
-    ax.axhline(1.0, color="k", linestyle="--", linewidth=1, alpha=0.6)
-    ax.set_xlabel("simulated time since landing (s)")
-    ax.set_ylabel("rolling RTF (1 s windows)")
-    ax.set_title("Steady-state RTF jitter")
-    ax.legend(loc="best", fontsize=8)
+        ax.plot(xs, ys, marker="o", markersize=4, linewidth=1.5,
+                color=_color(n), label=_legend_label(n))
+    ax.axhline(1.0, color="k", linestyle="--", linewidth=1.2, alpha=0.7, label="real-time = 1.0")
+    ax.set_xlabel("simulated time since landing (s)", fontsize=9)
+    ax.set_ylabel("rolling RTF (1 s windows)", fontsize=9)
+    ax.set_title("Steady-state RTF jitter", fontsize=11)
+    ax.legend(loc="upper left", fontsize=7.5, framealpha=0.85,
+              bbox_to_anchor=(1.01, 1), borderaxespad=0)
     ax.grid(alpha=0.3)
 
-    plt.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
     output.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output, dpi=120)
+    plt.savefig(output, dpi=120, bbox_inches="tight")
+    print(f"[run_all] wrote {output}")
     print(f"[run_all] wrote {output}")
 
 

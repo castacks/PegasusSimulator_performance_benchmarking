@@ -26,6 +26,7 @@ All runs were done with `headless: false` (windowed), so rendering overhead is p
 | 4 | Pegasus + Python drone, Full Warehouse, 250 Hz | 1/250 | **0.31** |
 | 5 | Pegasus + PX4 drone, Full Warehouse, 250 Hz | 1/250 | **0.31** |
 
+![graph](results/summary.png)
 ---
 
 ## Key Findings

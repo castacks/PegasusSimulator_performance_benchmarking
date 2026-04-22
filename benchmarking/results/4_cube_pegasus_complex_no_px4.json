@@ -1,0 +1,46 @@
+{
+  "script": "4_cube_pegasus_complex_no_px4",
+  "config": {
+    "pegasus": true,
+    "scene": "Full Warehouse",
+    "drone_backend": "python_nonlinear_controller",
+    "headless": false
+  },
+  "physics_dt": 0.004,
+  "rendering_dt": 0.016666666666666666,
+  "startup_sim_app_s": 11.606166916084476,
+  "startup_world_and_scene_s": 14.966426962986588,
+  "startup_total_s": 26.572593879071064,
+  "fall_wallclock_s": 2.449298280989751,
+  "fall_simulated_s": 0.352,
+  "fall_steps": 88,
+  "fall_rtf": 0.1437146315465335,
+  "steady_wallclock_s": 16.35675691999495,
+  "steady_simulated_s": 5.0,
+  "steady_steps": 1250,
+  "steady_rtf": 0.30568406833067635,
+  "rolling_rtf": [
+    {
+      "sim_time_s": 1.0,
+      "rtf": 0.303814
+    },
+    {
+      "sim_time_s": 2.0,
+      "rtf": 0.311032
+    },
+    {
+      "sim_time_s": 3.0,
+      "rtf": 0.310834
+    },
+    {
+      "sim_time_s": 4.0,
+      "rtf": 0.30202
+    },
+    {
+      "sim_time_s": 5.0,
+      "rtf": 0.301028
+    }
+  ],
+  "landed": true,
+  "timed_out": false
+}
